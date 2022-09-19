@@ -1,8 +1,11 @@
 # STM32-Audio-recording-
 This project is about sampling I2S Microphone and streaming data to the SD card in real-time. The communication with SD card is over SDIO periphral using FATFs stack. The code was developed using STM32CubeMx and STM32 HAL API.
+
 The video tutorial can be found on:
 First part: https://youtu.be/NJXrJQPO7jk
+
 Second part: https://youtu.be/016LOU0Gf84
+
 Third part: https://youtu.be/v9Otedngh24
 
 Please visit my website if you want to lear STM32 Programming systematically:
@@ -23,9 +26,3 @@ SD card slot:
 https://www.sparkfun.com/products/12941
 https://www.digikey.com/es/products/detail/sparkfun-electronics/BOB-12941/5762434?s=N4IgjCBcoLQBxVAYygMwIYBsDOBTANCAPZQDa4ArAGwIC6AvvYQExkgBCA8uzGMwJwAWCAyA
 
-First part: https://youtu.be/NJXrJQPO7jk
-Second part: https://youtu.be/016LOU0Gf84
-
-STM32 Introductory Course:
-https://www.steppeschool.com/pages/homepage
-https://www.steppeschool.com/courses/stm326
