@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "audio_sd.h"
+#include "arm_math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,9 +49,14 @@ SD_HandleTypeDef hsd;
 
 /* USER CODE BEGIN PV */
 int16_t data_i2s[WAV_WRITE_SAMPLE_COUNT];
+float32_t data_one_channel1[WAV_WRITE_SAMPLE_COUNT / 4],
+	data_one_channel2[WAV_WRITE_SAMPLE_COUNT / 4];
+float32_t data_out_fft1[WAV_WRITE_SAMPLE_COUNT / 4],
+	data_out_fft2[WAV_WRITE_SAMPLE_COUNT / 4];
 volatile int16_t sample_i2s;
 volatile uint8_t button_flag, start_stop_recording;
 volatile uint8_t  half_i2s, full_i2s;
+arm_rfft_fast_instance_f32 fft_audio_instance;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -98,12 +104,10 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2S2_Init();
-  MX_SDIO_SD_Init();
-  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
   HAL_I2S_DMAStop(&hi2s2);
   HAL_Delay(500);
-  sd_card_init();
+  arm_rfft_fast_init_f32(&fft_audio_instance, WAV_WRITE_SAMPLE_COUNT / 4);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -117,7 +121,6 @@ int main(void)
 		  {
 			  HAL_I2S_DMAStop(&hi2s2);
 			  start_stop_recording = 0;
-			  stop_recording();
 			  half_i2s = 0;
 			  full_i2s = 0;
 			  printf("stop recording \n");
@@ -125,7 +128,6 @@ int main(void)
 		  else
 		  {
 			  start_stop_recording = 1;
-			  start_recording(I2S_AUDIOFREQ_32K);
 			  printf("start_recording %d and %d\n", half_i2s, full_i2s);
 			  HAL_I2S_Receive_DMA(&hi2s2, (uint16_t *)data_i2s, sizeof(data_i2s)/2);
 
@@ -137,12 +139,39 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  if(start_stop_recording == 1 && half_i2s == 1)
 	  {
-		  write2wave_file(((uint8_t*)data_i2s),	 WAV_WRITE_SAMPLE_COUNT);
+		  for(int i = 0; i < WAV_WRITE_SAMPLE_COUNT / 4; i++ )
+		  {
+			  data_one_channel1[i] = (float32_t)data_i2s[i * 2];
+		  }
+		  arm_rfft_fast_f32(&fft_audio_instance, data_one_channel1, data_out_fft1, 0);
+		  arm_cmplx_mag_f32(
+				  data_out_fft1,
+				  data_out_fft1,
+				  WAV_WRITE_SAMPLE_COUNT / 4);
+		  printf("h \n");
+		  if(full_i2s == 1)
+		  {
+			  printf("d \n");
+		  }
 		  half_i2s = 0;
 	  }
 	  if(start_stop_recording == 1 && full_i2s == 1)
 	  {
-		  write2wave_file(((uint8_t*)data_i2s) + WAV_WRITE_SAMPLE_COUNT, WAV_WRITE_SAMPLE_COUNT);
+		  for(int i = 0; i < WAV_WRITE_SAMPLE_COUNT / 4; i++ )
+		  {
+			  data_one_channel2[i] = (float32_t)data_i2s[i * 2 +
+												WAV_WRITE_SAMPLE_COUNT / 2];
+		  }
+		  arm_rfft_fast_f32(&fft_audio_instance, data_one_channel2, data_out_fft2, 0);
+		  arm_cmplx_mag_f32(
+				  data_out_fft2,
+				  data_out_fft2,
+				  WAV_WRITE_SAMPLE_COUNT / 4);
+		  if(half_i2s == 1)
+		  {
+			  printf("d \n");
+		  }
+		  printf("f \n");
 		  full_i2s = 0;
 	  }
   }
@@ -315,7 +344,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 

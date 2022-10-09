@@ -2329,10 +2329,7 @@ HAL_SD_CardStateTypeDef HAL_SD_GetCardState(SD_HandleTypeDef *hsd)
   }
 
   cardstate = ((resp1 >> 9U) & 0x0FU);
-//  if(cardstate == HAL_SD_CARD_RECEIVING)
-//  {
-//	  return HAL_SD_CARD_TRANSFER;
-//  }
+
   return (HAL_SD_CardStateTypeDef)cardstate;
 }
 
