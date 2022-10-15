@@ -47,10 +47,13 @@ DMA_HandleTypeDef hdma_spi2_rx;
 
 SD_HandleTypeDef hsd;
 
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_tx;
+
 /* USER CODE BEGIN PV */
 int16_t data_i2s[WAV_WRITE_SAMPLE_COUNT];
-float32_t data_one_channel1[WAV_WRITE_SAMPLE_COUNT / 4],
-	data_one_channel2[WAV_WRITE_SAMPLE_COUNT / 4];
+float32_t mic1_data1[WAV_WRITE_SAMPLE_COUNT / 4],
+	mic1_data2[WAV_WRITE_SAMPLE_COUNT / 4];
 float32_t data_out_fft1[WAV_WRITE_SAMPLE_COUNT / 4],
 	data_out_fft2[WAV_WRITE_SAMPLE_COUNT / 4];
 volatile int16_t sample_i2s;
@@ -65,6 +68,7 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2S2_Init(void);
 static void MX_SDIO_SD_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -81,7 +85,7 @@ static void MX_SDIO_SD_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+uint8_t uart_counter;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -104,9 +108,14 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2S2_Init();
+  MX_SDIO_SD_Init();
+  MX_FATFS_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   HAL_I2S_DMAStop(&hi2s2);
   HAL_Delay(500);
+  //	Initializing FFT. We apply FFT for the first microphone and half of the buffer.
+  //	Therefore we divide by four: WAV_WRITE_SAMPLE_COUNT / 4
   arm_rfft_fast_init_f32(&fft_audio_instance, WAV_WRITE_SAMPLE_COUNT / 4);
   /* USER CODE END 2 */
 
@@ -114,9 +123,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  // when button is pressed
 	  if(button_flag)
 	  {
-
+		  //	stop recording: stop I2S DMA
 		  if(start_stop_recording)
 		  {
 			  HAL_I2S_DMAStop(&hi2s2);
@@ -125,53 +135,76 @@ int main(void)
 			  full_i2s = 0;
 			  printf("stop recording \n");
 		  }
+
+		  // start recording: start DMA
 		  else
 		  {
 			  start_stop_recording = 1;
-			  printf("start_recording %d and %d\n", half_i2s, full_i2s);
+			  printf("start_recording");
 			  HAL_I2S_Receive_DMA(&hi2s2, (uint16_t *)data_i2s, sizeof(data_i2s)/2);
-
 		  }
 		  button_flag = 0;
 	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  // When half of the buffer is full
 	  if(start_stop_recording == 1 && half_i2s == 1)
 	  {
+		  // extracting the data of the first microphone
 		  for(int i = 0; i < WAV_WRITE_SAMPLE_COUNT / 4; i++ )
 		  {
-			  data_one_channel1[i] = (float32_t)data_i2s[i * 2];
+			  mic1_data1[i] = (float32_t)data_i2s[i * 2];
 		  }
-		  arm_rfft_fast_f32(&fft_audio_instance, data_one_channel1, data_out_fft1, 0);
+		  // apply FFT
+		  arm_rfft_fast_f32(&fft_audio_instance, mic1_data1, data_out_fft1, 0);
+		  // extract absolute values by computing the magnitude of the complex numbers
 		  arm_cmplx_mag_f32(
 				  data_out_fft1,
 				  data_out_fft1,
-				  WAV_WRITE_SAMPLE_COUNT / 4);
-		  printf("h \n");
+				  WAV_WRITE_SAMPLE_COUNT / 8);
+		  // bias removal
+		  data_out_fft1[0] = 0;
 		  if(full_i2s == 1)
 		  {
 			  printf("d \n");
 		  }
+		  uart_counter++;
+		  //	setting ">>>>" to indicate the end of the buffer
+	  	  data_out_fft1[WAV_WRITE_SAMPLE_COUNT / 16] = ('>'<<24|'>'<<16|'>'<<8|'>');
+
+	  if (uart_counter == 10)
+		  {
+			  printf("uart start\n");
+			  uart_counter = 0;
+			  //	sending only half of the frequency values
+			  HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&data_out_fft1, sizeof(data_out_fft1) / 4 + 4);
+		  }
 		  half_i2s = 0;
 	  }
+
+	  //	THe buffer is full
 	  if(start_stop_recording == 1 && full_i2s == 1)
 	  {
+		  // extracting the data of the first microphone
 		  for(int i = 0; i < WAV_WRITE_SAMPLE_COUNT / 4; i++ )
 		  {
-			  data_one_channel2[i] = (float32_t)data_i2s[i * 2 +
+			  mic1_data2[i] = (float32_t)data_i2s[i * 2 +
 												WAV_WRITE_SAMPLE_COUNT / 2];
 		  }
-		  arm_rfft_fast_f32(&fft_audio_instance, data_one_channel2, data_out_fft2, 0);
+		  // applying FFT
+		  arm_rfft_fast_f32(&fft_audio_instance, mic1_data2, data_out_fft2, 0);
+		  // extract absolute values by computing the magnitude of the complex numbers
 		  arm_cmplx_mag_f32(
 				  data_out_fft2,
 				  data_out_fft2,
-				  WAV_WRITE_SAMPLE_COUNT / 4);
+				  WAV_WRITE_SAMPLE_COUNT / 8);
+		  // bias removal
+		  data_out_fft2[0] = 0;
 		  if(half_i2s == 1)
 		  {
 			  printf("d \n");
 		  }
-		  printf("f \n");
 		  full_i2s = 0;
 	  }
   }
@@ -286,6 +319,39 @@ static void MX_SDIO_SD_Init(void)
 }
 
 /**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
   * Enable DMA controller clock
   */
 static void MX_DMA_Init(void)
@@ -298,6 +364,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
 
 }
 
@@ -456,6 +525,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	{
 		button_flag = 1;
 	}
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	printf("uart over \n");
 }
 /* USER CODE END 4 */
 
