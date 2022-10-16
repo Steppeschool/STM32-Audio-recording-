@@ -159,6 +159,7 @@ uint8_t uart_counter;
 		  // apply FFT
 		  arm_rfft_fast_f32(&fft_audio_instance, mic1_data1, data_out_fft1, 0);
 		  // extract absolute values by computing the magnitude of the complex numbers
+		  // Pay attention that after this operation, half of the buffer possesses the magnitudes
 		  arm_cmplx_mag_f32(
 				  data_out_fft1,
 				  data_out_fft1,
@@ -171,14 +172,14 @@ uint8_t uart_counter;
 		  }
 		  uart_counter++;
 		  //	setting ">>>>" to indicate the end of the buffer
-	  	  data_out_fft1[WAV_WRITE_SAMPLE_COUNT / 16] = ('>'<<24|'>'<<16|'>'<<8|'>');
+	  	  data_out_fft1[WAV_WRITE_SAMPLE_COUNT / 8] = ('>'<<24|'>'<<16|'>'<<8|'>');
 
-	  if (uart_counter == 10)
+	  if (uart_counter == 30)
 		  {
 			  printf("uart start\n");
 			  uart_counter = 0;
-			  //	sending only half of the frequency values
-			  HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&data_out_fft1, sizeof(data_out_fft1) / 4 + 4);
+			  //	sending only half of the buffer
+			  HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&data_out_fft1, sizeof(data_out_fft1) / 2 + 4);
 		  }
 		  half_i2s = 0;
 	  }
@@ -195,6 +196,7 @@ uint8_t uart_counter;
 		  // applying FFT
 		  arm_rfft_fast_f32(&fft_audio_instance, mic1_data2, data_out_fft2, 0);
 		  // extract absolute values by computing the magnitude of the complex numbers
+		  // Pay attention that after this operation, half of the buffer possesses the magnitudes
 		  arm_cmplx_mag_f32(
 				  data_out_fft2,
 				  data_out_fft2,
