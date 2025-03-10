@@ -9,9 +9,10 @@ Second part: https://youtu.be/016LOU0Gf84
 
 Third part: https://youtu.be/v9Otedngh24
 
-Please visit my website if you want to lear STM32 Programming systematically:
-https://www.steppeschool.com/pages/homepage
-https://www.steppeschool.com/courses/stm326
+Please visit my website if you want to learn STM32 Programming systematically:
+https://www.steppeschool.com
+
+https://www.steppeschool.com/courses/stm32-programming-course
 
 
 HARDWARE
